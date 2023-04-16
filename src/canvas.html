@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="description" content="">
+	<meta name="author" content="">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<title>Potree Viewer Split Cloud</title>
+
+	<link rel="stylesheet" type="text/css" href="/build/potree/potree.css">
+	<link rel="stylesheet" type="text/css" href="/libs/jquery-ui/jquery-ui.min.css">
+	<link rel="stylesheet" type="text/css" href="/libs/openlayers3/ol.css">
+	<link rel="stylesheet" type="text/css" href="/libs/spectrum/spectrum.css">
+	<link rel="stylesheet" type="text/css" href="/libs/jstree/themes/mixed/style.css">
+	
+	<link rel="stylesheet" href="/libs/Bootstrap-icons/bootstrap-icons.css">
+	
+	<style>
+	
+		#potree_toolbar{
+			position: absolute; 
+			z-index: 10000; 
+			left: 100px; 
+			top: 0px;
+			background: black;
+			color: white;
+			padding: 0.3em 0.8em;
+			font-family: "system-ui";
+			border-radius: 0em 0em 0.3em 0.3em;
+			display: flex;
+		}
+	
+		.potree_toolbar_label{
+			text-align: center;
+			font-size: smaller;
+			opacity: 0.9;
+		}
+	
+		.potree_toolbar_separator{
+			background: white;
+			padding: 0px;
+			margin: 5px 10px;
+			width: 1px;
+		}
+
+	</style>
+
+	<!-- styles for cloud selector -->
+	<style>
+		.cloud_selection_toolbar{
+			position: fixed;
+			top:0;
+			right:0;
+			z-index:1000;
+			width: auto;
+		}
+		ul.cloud_selector {
+			list-style: none;
+			margin-bottom:5px;
+			margin-top:5px;
+			color: white;
+			padding-left: 0;
+			font-size: auto;
+		}
+
+		li.cloud_selector {
+			margin-bottom: 5px;
+			color: white;
+			padding-left: 15px;
+			font-size: medium;
+		}
+
+		button.cloud_selector {
+			
+			
+			border:none;
+			padding: auto;
+			font-size: large;
+			background-color: transparent;
+			color:white;
+			cursor:pointer;
+			
+		}
+		h4.cloud_selector {
+			color:white;
+			text-align: left;
+			margin-top:10px;
+			margin-bottom: 10px;
+			
+		}
+		div.cloud_selector {
+			display: inline;
+		}
+		
+	</style>
+
+
+</head>
+
+<body>
+	
+	<script id="cloud_paths_names"></script>
+
+	<script src="/libs/jquery/jquery-3.1.1.min.js"></script>
+	<script src="/libs/spectrum/spectrum.js"></script>
+	<script src="/libs/jquery-ui/jquery-ui.min.js"></script>
+	<script src="/libs/other/BinaryHeap.js"></script>
+	<script src="/libs/tween/tween.min.js"></script>
+	<script src="/libs/d3/d3.js"></script>
+	<script src="/libs/proj4/proj4.js"></script>
+	<script src="/libs/openlayers3/ol.js"></script>
+	<script src="/libs/i18next/i18next.js"></script>
+	<script src="/libs/jstree/jstree.js"></script>
+	<script src="/build/potree/potree.js"></script>
+	<script src="/libs/plasio/js/laslaz.js"></script>
+		
+	
+	<div class="potree_container" style="position: absolute; width: 100%; height: 100%; left: 0px; top: 0px; ">
+		<div id="potree_render_area" style="background-image: url('/build/potree/resources/images/background.jpg');">
+			<div id="potree_toolbar"></div>
+			<div id="cloud_selector" class="cloud_selection_toolbar">
+				<h4 class="cloud_selector">Point cloud selection</h4>
+				<div id="cloud_selection_list_container">
+
+				</div>
+
+			</div>
+		</div>
+		<div id="potree_sidebar_container"> </div>
+	</div>
+	
+
+
+	<script type="module">
+
+	import * as THREE from "/libs/three.js/build/three.module.js";
+
+		window.viewer = new Potree.Viewer(document.getElementById("potree_render_area"));
+		
+		viewer.setEDLEnabled(true);
+		viewer.setFOV(40);
+		viewer.loadSettingsFromURL();
+		viewer.useHQ = true;
+		viewer.setPointBudget(10*1000*1000);
+		viewer.toggleSidebar();
+		viewer.setDescription("Point Cloud");
+		viewer.minNodeSize = 0;
+		
+		viewer.loadGUI(() => {
+			viewer.setLanguage('en');
+			$("#menu_tools").next().show();
+		});
+	 
+			
+
+		
+		let defaultGradient = "RAINBOW";
+		//Load point clouds
+		for (let i=0; i<cloudPaths.length; i++) {
+			Potree.loadPointCloud(cloudPaths[i], cloudNames[i], c => {
+			let pointcloud = c.pointcloud;
+			//if (i != 0) pointcloud.visible = false; // hide all but 1st cloud
+			let material = pointcloud.material;
+
+			
+			viewer.scene.addPointCloud(pointcloud);
+
+			material.pointSizeType = Potree.PointSizeType.FIXED;
+			pointcloud.material.activeAttributeName = "elevation";
+			material.gradient = Potree.Gradients[defaultGradient];
+			viewer.fitToScreen();
+		});
+		
+		}
+		
+	</script>
+
+	<script>
+		const elToolbar = $("#potree_toolbar");
+		elToolbar.html(`
+			<style>
+				#apply_gradient {
+					display: inline;
+					position: static;
+					margin-top: 0.5em;
+					margin-left: 0.1em;
+					width: 5em;
+					
+				}
+
+			</style>
+			<span>
+				<div class="potree_toolbar_label">
+					Gradient
+				</div>
+
+				<div>
+					<span name="gradient_schemes"></span>
+					</div>
+				
+			</span>
+			<span class="potree_toolbar_separator"></span>
+			<span>
+			<div class="potree_toolbar_label">
+						Gradient On/Off
+					</div>
+				<div>
+					<div>
+						<button id="apply_gradient" class="toolbar_btn">Disable</button>
+					</div>
+				</div>
+			</span>
+
+			<span class="potree_toolbar_separator"></span>
+			<span>
+			<div class="potree_toolbar_label">
+						Flip Vertical Axis
+					</div>
+				<div>
+					<div>
+						<button id="btnFlipVertical" class="toolbar_btn">Flip Z</button>
+					</div>
+				</div>
+			</span>
+		`);
+
+
+		{// GRADIENT
+			const schemes = Object.keys(Potree.Gradients).map(name => ({name: name, values: Potree.Gradients[name]}));
+			const elGradientSchemes = elToolbar.find("span[name=gradient_schemes]");
+
+			for(const scheme of schemes){
+				const elButton = $(`
+					<span style=""></span>
+				`);
+
+				const svg = Potree.Utils.createSvgGradient(scheme.values);
+				svg.setAttributeNS(null, "class", `button-icon`);
+				svg.style.height = "2em";
+				svg.style.width = "1.3em";
+
+				elButton.append($(svg));
+
+				let CloudSelection = elToolbar.find('#optCloud');
+				
+				elButton.click( () => {
+					for(const pointcloud of viewer.scene.pointclouds){
+						if (pointcloud.visible) {
+							pointcloud.material.gradient = Potree.Gradients[scheme.name];
+						}
+					}
+				});
+
+				elGradientSchemes.append(elButton);
+			}
+		const BtnGradientEnable = document.getElementById("apply_gradient");
+		BtnGradientEnable.addEventListener("click", () => {
+		for(const pointcloud of viewer.scene.pointclouds){
+			if (BtnGradientEnable.innerHTML == "Disable") {
+				pointcloud.material.activeAttributeName = "classification";
+			} else {
+				pointcloud.material.activeAttributeName = "elevation";
+			}
+		}
+		BtnGradientEnable.innerHTML = BtnGradientEnable.innerHTML == "Disable" ? "Enable" : "Disable";
+	});
+		}
+
+	//FLIP Z BUTTON
+	{
+		const btnFlipZ = document.getElementById("btnFlipVertical");
+		btnFlipZ.addEventListener("click", () => {
+			console.log("Fliping Z axis");
+			viewer.scene.cameraP.scale.y = -viewer.scene.cameraP.scale.y;
+			viewer.orbitControls.flipVertical = !viewer.orbitControls.flipVertical;
+		});
+	}
+	</script>
+
+	<script id="cloud_selection_list_listeners" type="module" src=""></script>
+
+</body>
+</html>

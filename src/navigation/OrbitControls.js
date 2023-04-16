@@ -37,6 +37,7 @@ export class OrbitControls extends EventDispatcher{
 		this.pitchDelta = 0;
 		this.panDelta = new THREE.Vector2(0, 0);
 		this.radiusDelta = 0;
+		this.flipVertical = false;
 
 		this.doubleClockZoomEnabled = true;
 
@@ -60,12 +61,20 @@ export class OrbitControls extends EventDispatcher{
 
 			if (e.drag.mouse === MOUSE.LEFT) {
 				this.yawDelta += ndrag.x * this.rotationSpeed;
-				this.pitchDelta += ndrag.y * this.rotationSpeed;
+				if (this.flipVertical) {
+					this.pitchDelta -= ndrag.y * this.rotationSpeed;
+				} else {
+					this.pitchDelta += ndrag.y * this.rotationSpeed;
+				}
 
 				this.stopTweens();
 			} else if (e.drag.mouse === MOUSE.RIGHT) {
 				this.panDelta.x += ndrag.x;
-				this.panDelta.y += ndrag.y;
+				if (this.flipVertical) {
+					this.panDelta.y -= ndrag.y;
+				} else {
+					this.panDelta.y += ndrag.y;
+				}
 
 				this.stopTweens();
 			}

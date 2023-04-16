@@ -6,12 +6,44 @@ const exec = require('child_process').exec;
 const fs = require("fs");
 const fsp = fs.promises;
 const concat = require('gulp-concat');
-const connect = require('gulp-connect');
 const {watch} = gulp;
+const ini = require("ini");
 
 const {createExamplesPage} = require("./src/tools/create_potree_page");
 const {createGithubPage} = require("./src/tools/create_github_page");
 const {createIconsPage} = require("./src/tools/create_icons_page");
+
+const {PythonShell} = require("python-shell");
+const cheerio = require("cheerio");
+
+// read config.ini file==============
+var config = ini.parse(fs.readFileSync('./config.ini', 'utf-8'))
+
+config.pointClouds.pointclouds_dir = path.normalize(config.pointClouds.pointclouds_dir);
+config.pointClouds.zip_files_dir = path.normalize(config.pointClouds.zip_files_dir);
+config.pointClouds.potree_clouds_dir = path.normalize(config.pointClouds.potree_clouds_dir);
+config.pointClouds.split_cloud_viewer_html_dir = path.normalize(config.pointClouds.split_cloud_viewer_html_dir);
+
+if (config.pointClouds.pointclouds_dir.slice(-1) != "/") config.pointClouds.pointclouds_dir += '/';
+if (config.pointClouds.zip_files_dir.slice(-1) != "/") config.pointClouds.zip_files_dir += '/';
+if (config.pointClouds.potree_clouds_dir.slice(-1) != "/") config.pointClouds.potree_clouds_dir += '/';
+if (config.pointClouds.split_cloud_viewer_html_dir.slice(-1) != "/") config.pointClouds.split_cloud_viewer_html_dir += '/';
+
+//create directories if they do no exist:
+if (!fs.existsSync(config.pointClouds.pointclouds_dir)) fs.mkdirSync(config.pointClouds.pointclouds_dir);
+if (!fs.existsSync(config.pointClouds.zip_files_dir)) fs.mkdirSync(config.pointClouds.zip_files_dir);
+if (!fs.existsSync(config.pointClouds.potree_clouds_dir)) fs.mkdirSync(config.pointClouds.potree_clouds_dir);
+if (!fs.existsSync(config.pointClouds.split_cloud_viewer_html_dir)) fs.mkdirSync(config.pointClouds.split_cloud_viewer_html_dir);
+//===================================
+
+
+//setup pointclouds path in index.html
+console.log("Updating index.html");
+let index_html = cheerio.load(fs.readFileSync("./index.html", "utf-8"));
+index_html("#cloud_vars_script").attr("src", config.pointClouds.pointclouds_dir + "cloud_vars.js" );
+fs.writeFileSync("./index.html", index_html.html(), "utf-8");
+
+
 
 
 let paths = {
@@ -74,14 +106,7 @@ let shaders = [
 	"src/materials/shaders/blur.fs",
 ];
 
-// For development, it is now possible to use 'gulp webserver'
-// from the command line to start the server (default port is 8080)
-gulp.task('webserver', gulp.series(async function() {
-	server = connect.server({
-		port: 1234,
-		https: false,
-	});
-}));
+
 
 gulp.task('examples_page', async function(done) {
 	await Promise.all([
@@ -99,11 +124,6 @@ gulp.task('icons_viewer', async function(done) {
 
 });
 
-gulp.task('test', async function() {
-
-	console.log("asdfiae8ofh");
-
-});
 
 gulp.task("workers", async function(done){
 
@@ -180,7 +200,275 @@ gulp.task("pack", async function(){
 	});
 });
 
-gulp.task('watch', gulp.parallel("build", "pack", "webserver", async function() {
+
+const express = require("express");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer);
+
+
+gulp.task("initCloudDirs", async function() {
+	//whenever server starts or pointclouds directory changes
+	//update cloud_vars.js
+
+	var cloud_vars = "var cloudPaths = [];\n\n";
+	//read content of pointclouds
+	var dirs = fs.readdirSync(config.pointClouds.pointclouds_dir);
+	console.log("Updating cloud_vars.js");
+
+	for (let dir of dirs) {
+		if (fs.lstatSync(config.pointClouds.pointclouds_dir + dir).isDirectory()) { //is directory and not file
+			let dirContent = fs.readdirSync(config.pointClouds.pointclouds_dir + dir);
+			if (dirContent.includes("metadata.json") && dirContent.includes("octree.bin") && dirContent.includes("hierarchy.bin")) {
+				cloud_vars += "cloudPaths.push(\"" + config.pointClouds.pointclouds_dir + dir + "/metadata.json\");\n";
+			}
+		}
+	}
+
+	fs.writeFileSync(config.pointClouds.pointclouds_dir + "cloud_vars.js", cloud_vars);
+	
+});
+/*
+gulp.task("map_clients_clouds", async function() {
+	//this updates client_clouds_map.json with all of clients and their links 
+	//whenever change is detected
+	console.log("Updating client_clouds_map.json")
+
+	const dirsClient = fs.readdirSync(config.pointClouds.potree_clouds_dir);
+	const dirsZIP = fs.readdirSync(config.pointClouds.zip_files_dir);
+*/
+	/* structure:
+	map = { 
+		clientID: [
+			clouds: [
+				cloud_name1: [
+					pt1:"path1"
+					pt2:"path2"
+				],
+				cloud_name2:...
+			],
+			zips: [
+				0:"zip0.zip"
+			]
+		],
+		next_ClientID:...	
+	}
+	*/
+	/*
+	let map = {}
+
+	for (let i=0; i < dirsClient.length; i++) {
+		let clID = dirsClient[i]; //client ID
+		if (fs.lstatSync(path.join(config.pointClouds.potree_clouds_dir, clID)).isDirectory()) {
+			map[clID] = {};
+			map[clID]["clouds"] = {};
+			map[clID]["zips"] = {};
+
+			let cloud_dirs = fs.readdirSync(path.join(config.pointClouds.potree_clouds_dir, clID));
+			let j = 1;
+			for (let cloud_name of cloud_dirs) {
+				map[clID]["clouds"][cloud_name] = {}
+				let cloud_parts = fs.readdirSync(path.join(config.pointClouds.potree_clouds_dir, clID, cloud_name));
+				
+				let k = 1;
+				for (let part of cloud_parts) {
+					if (fs.existsSync(path.join(config.pointClouds.potree_clouds_dir, clID, cloud_name, part, "metadata.json"))) {
+						map[clID]["clouds"][cloud_name]["part_"+j+"_"+k] = path.join(part,"metadata.json");
+					} else {
+						break;
+					}
+					k++;
+				}
+				j++;
+			}
+
+			if (dirsZIP.includes(clID)) {
+				let zip_files = fs.readdirSync(path.join(config.pointClouds.zip_files_dir, clID));
+				for (let zip of zip_files) {
+					if (path.extname(zip) === ".zip") {
+						let cloud_name = path.parse(zip).name;
+						map[clID]["zips"][cloud_name] = zip;
+				}
+				}
+			}
+
+		}
+	}
+	let str_map = JSON.stringify(map);
+	//console.log(str_map);
+	//console.log("==============");
+	fs.writeFileSync("src/client_clouds_map.json", str_map);
+
+});
+*/
+//webserver
+gulp.task("webserver", gulp.series(async function() {
+	
+	let options_pc_dir = {
+		ignoreInitial:false,
+		ignored:[config.pointClouds.pointclouds_dir + "cloud_vars.js","readme.txt"] //otherwise it goes into infinite loop
+	};
+	let options_potree_dir = {
+		ignoreInitial: false
+	};
+
+	watch(config.pointClouds.pointclouds_dir , options_pc_dir, gulp.series("initCloudDirs"));
+	//watch([config.pointClouds.potree_clouds_dir, config.pointClouds.zip_files_dir], options_potree_dir, gulp.series("map_clients_clouds"));
+
+	io.on("connection", (socket) => {
+		console.log(`Client with ID ${socket.id} connected`);
+
+		socket.on('disconnect', () => {
+    		console.log(`Client with ID: ${socket.id} disconnected`);
+		});
+		socket.on("SplitBtnClick", (metadata) => {
+			
+			console.log(`Client with id ${socket.id} requested cloud splitting.`);
+
+			/* ================EXECUTE PYTHON CODE ===========================
+				options: scriptPath - specify python script path
+				args: arguments to be passed to python
+
+				pyshell - runs python script,
+				pyshell.on('message'... listens for print() from python
+
+				
+				.io.to...emit -> lets client side know that "pyDone" event has happened
+				messageToClient is passed over to client side
+			*/
+			let options = {
+				scriptPath: ".", //"./Python scripts",
+				args: [metadata],
+				env: {
+					PYTHONIOENCODING: 'UTF-8' // set UTF-8 encoding
+				}
+			}
+			
+			const pyshell_split = new PythonShell('./Python scripts/splitCloud.py', options);
+
+			let messageToClient;
+			pyshell_split.on('message', (message) => {
+				let messages;
+				try {
+					messages = JSON.parse(message.replace(/'/g, '"'));
+				} catch {
+					messages = ["LOG", message];
+				}
+				
+				let flag;
+				if (messages[0] == "Success!") {
+					messageToClient = messages[1];
+					console.log('Success! Result: %j', messageToClient);
+					flag = true;
+				} else if (messages[0]== "LOG"){
+					console.log(`PYTHON LOG: ${messages[1]}`);
+					flag = false;
+				} else {
+					messageToClient = "Fail";
+					console.log('Error: %j', messages[1]);
+					flag = true;
+				}
+				if (flag) io.to(socket.id).emit("pyDone", messageToClient);
+			});
+
+			pyshell_split.end((err, code, signal) => {
+				if (err) {
+					console.log("Python script failed!");
+					io.to(socket.id).emit("pyDone", "Fail");
+					console.log(`*******************Python Error START*******************\n\n\n${err.stack}\n\n\n*********************Python Error END*******************`)
+				} else {
+					console.log("Python script finished successfully!");
+				}
+			});
+
+
+			/* ================END EXECUTE PYTHON CODE =======================*/
+
+		});
+		
+		socket.on("splitDwnldClick", (metadata) => {
+			
+			console.log(`User with id ${socket.id} requested a download.`);
+			let options = {
+				scriptPath: ".",
+				args: [metadata]
+			}
+
+			const pyshell_dwnld = new PythonShell("./Python scripts/prepareCSVs.py", options);
+
+			let link;
+			pyshell_dwnld.on('message', (message) => {
+				let messages = JSON.parse(message.replace(/'/g, '"'));
+				if (messages[0] == "Success!") {
+					link = messages[1];
+					console.log('Success! Result: %j', link);
+				} else {
+					link = "Fail";
+					console.log('Error: %j', messages[1]);
+				}
+				io.to(socket.id).emit("pyDone_dwnld", link);
+			});
+
+			pyshell_dwnld.end((err, code, signal) => {
+				if (err) {
+					console.log("Python script failed!");
+					io.to(socket.id).emit("pyDone_dwnld", "Fail");
+					console.log(`*******************Python Error START*******************\n\n\n${err.stack}\n\n\n*********************Python Error END*******************`)
+				} else {
+					console.log("Python script finished successfully!");
+				}
+			});
+
+			
+		});
+		
+	});
+
+
+	/* ===========which directories client requires ========================*/
+	const dirNeededByUser = [
+		'build',
+		'docs',
+		'libs',
+		'resources'
+	];
+
+	//add directories from config.ini:
+	dirNeededByUser.push(config.pointClouds.pointclouds_dir);
+	dirNeededByUser.push(config.pointClouds.zip_files_dir);
+	dirNeededByUser.push(config.pointClouds.potree_clouds_dir);
+	dirNeededByUser.push(config.pointClouds.split_cloud_viewer_html_dir);
+	
+	dirNeededByUser.forEach((dir) => {
+		const fullPath = path.join(__dirname, dir);
+		app.use("/" + dir, express.static(fullPath));
+	});
+	/* ===========END which directories client requires ====================*/
+
+
+	// Route for the homepage
+	app.get('/', (req, res) => {
+	  res.sendFile(__dirname + '/index.html');
+	});
+	
+
+
+	// Start the server
+	const port = 1234;
+	const host = "0.0.0.0";
+	httpServer.listen(port, host, () => {
+		  console.log(`Server started on ${host}:${port}`);
+	});
+	
+}));
+
+
+
+
+gulp.task('watch', gulp.parallel("build", "pack", "webserver", async function() {//
 
 	let watchlist = [
 		'src/**/*.js',
@@ -193,9 +481,7 @@ gulp.task('watch', gulp.parallel("build", "pack", "webserver", async function() 
 		'examples//**/*.json',
 		'!resources/icons/index.html',
 	];
-
+	
 	watch(watchlist, gulp.series("build", "pack"));
 
 }));
-
-

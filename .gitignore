@@ -16,6 +16,8 @@ libs/CesiumUnminified
 /resources/icons/index.html
 /examples/page.html
 
+.vscode
+
 /pointclouds/retz
 /pointclouds/NVIDIA_Ph01-20160403_tiles_converted
 /pointclouds/D
@@ -31,3 +33,14 @@ libs/CesiumUnminified
 /pointclouds/morro_bay_converted
 /pointclouds/helimap_epalinges
 pointclouds/F
+
+split_pointclouds/
+LASs/
+zipFiles/
+split_htmls/
+Python scripts/__pycache__/
+src/client_clouds_map.json
+
+/test.py
+
+/pointclouds/*
