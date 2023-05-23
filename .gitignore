@@ -18,6 +18,7 @@ libs/CesiumUnminified
 
 
 split_pointclouds/
+pointclouds
 Python scripts/__pycache__/
 src/client_clouds_map.json
 
