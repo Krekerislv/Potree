@@ -330,8 +330,12 @@
 							classif_atr_ind = i;
 						}
 					}
-					let cluster_count = metadata.attributes[classif_atr_ind].max[0] + 1; //+1 because min is 0
 
+					let cluster_count = 1;
+					for (let i=0; i < 254; i++) {
+						if (metadata.attributes[classif_atr_ind].histogram[i] != 0) cluster_count = i+1
+					}
+					
 					// find index of target cloud
 					const index = viewer.scene.pointclouds.findIndex(element => element.name === cloud_name);
 
