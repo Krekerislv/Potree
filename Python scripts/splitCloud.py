@@ -12,81 +12,68 @@ Argument: JSON containing cloud name, split axis and split points
 		splitAxis: X or Y or Z
         splitPoints: array of coordinates. first and last indicate minimum and maximum cloud values
         metadataPath: path of metadata.json for cloud that's being split
-		clientID: id of client
     }
 
 '''
-try:
-	import subprocess
-	import sys
-	import json
-	import os
-	import time
-	from posixpath import join
-	import laspy
-	import numpy as np
-	import pandas as pd
-	import bs4
-	import configparser
-except Exception as e:
-	print(["Error", "Importing Python libraries failed"])
-	raise e
 
-#this metadata refers to the one recieved from client (contains split axis, splitpoints, cloud metadata path and clientID)
+import subprocess
+import sys
+import json
+import os
+from posixpath import join
+import laspy
+import numpy as np
+import pandas as pd
+import bs4
+import configparser
+
+
+#this metadata refers to the one recieved from client (contains split axis, splitpoints, cloud metadata path)
 metadata = None
 
-clientID = None
 cloud_metadata_path = None
 
 cloudName = None
 
 potreeConverterPath = None
-LASpath = None
-zipFilesDir = None
 potreeCloudDirs = None
-potreeHTMLDirs = None
 
 csvFilesDir = None
 
 
-def log(data):
-	print(["LOG", f"{data}"])
+def log(data, type="LOG"):
+	# This is done so later when js is converting this to array object,
+	# the apostrophe doesn't confuse JSON.parse()
+	data = data.replace("'", "′")
 
-def makeDir(orgDir, flag, sep):
-	if flag:
-		orgDir = os.path.normpath(orgDir)
-		orgDir += "1"
-		if os.path.exists(orgDir):
-			split_dir = orgDir.split(sep)
-			i = 1
-			while os.path.exists(orgDir):
-				split_dir[-1] = str(i)
-				orgDir = sep.join(split_dir)
-				i += 1
-	else:
-		orgDir = os.path.normpath(orgDir)
-		if os.path.exists(orgDir):
-			i = 1
-			head, tail = os.path.split(orgDir)
-			
-			while os.path.exists(orgDir):
-				orgDir = os.path.join(head, tail+"_{}".format(i))
-				i+=1
+	# Printing the data sends it to Node.js python-shell
+	# type is used to identify log, error etc.
+	print([type, data], flush=True)
+
+# Generate a path name with number
+def genPath(path, sep="_"):
+	path = os.path.normpath(path)
+	i = 1
+
+	head, tail = os.path.split(path)
+
+	firstIterFlag = True
+	while os.path.exists(path) or firstIterFlag:
+		firstIterFlag = False
+		path = os.path.join(head, tail + sep + "{}".format(i))
+		i+=1
+
+	return path
+
+# Makes numbered directory
+def makeDir(orgDir, sep="_"):
+	orgDir = genPath(orgDir, sep=sep)
 	os.makedirs(orgDir)
 	return orgDir
 	
-def genFilePath(orgFile):
-	if os.path.isfile(orgFile):
-		base, ext = os.path.splitext(orgFile)
-		k=1
-		while os.path.isfile(orgFile):
-			orgFile = base + "_{}".format(str(k)) + ext
-			k += 1
-	return orgFile
-
 # a method to init config and metadata
 def initConfiguration(sysArg):
-	global metadata, clientID, cloud_metadata_path, cloudName, potreeConverterPath, LASpath, zipFilesDir, potreeCloudDirs, potreeHTMLDirs, csvFilesDir
+	global metadata, cloud_metadata_path, cloudName, potreeConverterPath, potreeCloudDirs, csvFilesDir
 	
 	# LOAD VARIABLES FROM CONFIG.INI =================
 	try:
@@ -95,53 +82,34 @@ def initConfiguration(sysArg):
 
 		potreeConverterPath = config.get("PotreeConverter", "path").rstrip("\r\n")
 		if not os.path.isfile(potreeConverterPath):
-			print(["Error", "PotreeConverter path is invalid!"])
+			log("PotreeConverter path is invalid!", type="Error")
 			raise Exception("Invalid PotreeConverter path")
 
-		LASpath = config.get("pointClouds", "las_file_dir").rstrip("\r\n")
-		zipFilesDir = config.get("pointClouds", "zip_files_dir").rstrip("\r\n")
-		potreeCloudDirs = config.get("pointClouds", "potree_clouds_dir").rstrip("\r\n")
-		potreeHTMLDirs = config.get("pointClouds", "split_cloud_viewer_html_dir").rstrip("\r\n")
+		potreeCloudDirs = config.get("pointClouds", "split_pointclouds_dir").rstrip("\r\n")
 		csvFilesDir = config.get("pointClouds", "csv_files_dir").rstrip("\r\n")
 	except Exception as e:
-		print(["Error", "Couldn't open config.ini or invalid variable name!"])
+		log("Couldn't open config.ini or invalid variable name!", type="Error")
 		raise e
 	#============================================================================
 
 	# LOAD VARIABLES FROM METADATA
 	try:
 		metadata = json.loads(sysArg)
-		clientID = metadata["clientID"]
 		cloud_metadata_path = os.path.normpath(metadata["metadataPath"])
 		cloudName = cloud_metadata_path.split(os.sep)[-2]
 	except Exception as e:
-		print(["Error", "Loading cloud metadata failed"])
+		log("Loading cloud metadata failed", type="Error")
 		raise e
 
 def updateClientCloudMap():
 	map = {}
-	dirsClient = os.listdir(potreeCloudDirs)
-	dirsZIP = os.listdir(zipFilesDir)
-	for clID in dirsClient:
-		if os.path.exists(os.path.join(potreeCloudDirs, clID)):
-			map[clID] = {}
-			map[clID]["clouds"] = {}
-			map[clID]["zips"] = {}
-
-			cloud_dirs = os.listdir(os.path.join(potreeCloudDirs, clID))
+	
+	for cloud in os.listdir(potreeCloudDirs):
+		if os.path.isdir(os.path.join(potreeCloudDirs, cloud)):
+			cloud_dirs = os.listdir(os.path.join(potreeCloudDirs, cloud))
+			map[cloud] = {}
 			for j, cloud_name in enumerate(cloud_dirs, start=1):
-				map[clID]["clouds"][cloud_name] = {}
-				cloud_parts = os.listdir(os.path.join(potreeCloudDirs, clID, cloud_name))
-
-				for k, part in enumerate(cloud_parts, start=1):
-					map[clID]["clouds"][cloud_name][f"part_{j}_{k}"] = join(part, "metadata.json")
-		
-			if clID in dirsZIP:
-				zip_files = os.listdir(os.path.join(zipFilesDir, clID))
-				for zip in zip_files:
-					if os.path.splitext(zip)[1] == ".zip":
-						cloud_name = os.path.split(zip)[-1]
-						map[clID]["zips"][cloud_name] = zip
+				map[cloud][f"part_{j}"] = join(cloud_name, "metadata.json")
 	
 	json_file = open(os.path.join("src","client_clouds_map.json"), "w")
 	json_file.write(json.dumps(map, indent=2))
@@ -149,14 +117,10 @@ def updateClientCloudMap():
 	
 	return map
 
-def setupCloudSelection(canvas): #TODO sets up list and links for buttons(all of them, see test.py__
+def setupCloudSelection(canvas):
 	
-	c_c_map = updateClientCloudMap()
-	clouds = c_c_map[clientID]["clouds"]
-	zips = c_c_map[clientID]["zips"]
+	clouds = updateClientCloudMap()
 	
-			
-
 	div_tag_html = canvas.find("div", {"id":"cloud_selection_list_container"})
 	div_tag_html.clear()
 	div_tag = '<ul class="cloud_selector">\n'
@@ -164,12 +128,10 @@ def setupCloudSelection(canvas): #TODO sets up list and links for buttons(all of
 	for i, cloud in enumerate(clouds, start=1):
 		div_tag += '\t<li class="cloud_selector">\n\t\t{}'.format(cloud)
 		div_tag += '\n\t\t<div class="cloud_selector">\n\t\t\t<button id="btn_view_{}" class="cloud_selector"><i class="bi bi-eye-fill"></i></button>\n'.format(i)
-		div_tag += '\t\t\t<button class="cloud_selector" id="btn-dnwld-{}"><i class="bi bi-cloud-download-fill"></i></button>\n'.format(i)
 		div_tag += '\t\t</div>\n\t\t<ul class="cloud_selector">'
-		for j, part in enumerate(clouds[cloud], start=1):
+		for j in range(1, len(clouds[cloud])+1, 1):
 			div_tag += '\n\t\t\t<li class="cloud_selector">\n\t\t\t\tpart {}'.format(str(i)+"."+str(j))
 			div_tag += '\n\t\t\t\t<div class="cloud_selector">\n\t\t\t\t\t<button class="cloud_selector" id="btn_view_{}-{}"><i class="bi bi-eye-fill"></i></button>\n'.format(i, j)
-			div_tag += '\t\t\t\t\t<button class="cloud_selector" id="btn_dnwld_{}-{}"><i class="bi bi-cloud-download-fill"></i></button>\n'.format(i,j)
 			div_tag += '\t\t\t\t</div>\n\t\t\t</li>\n'
 
 		div_tag += '\t\t</ul>\n'
@@ -180,7 +142,7 @@ def setupCloudSelection(canvas): #TODO sets up list and links for buttons(all of
 	tmp.encode_contents(formatter="html")
 	div_tag_html.append(tmp)
 
-	return canvas, c_c_map
+	return canvas, clouds
 
 def readOctree(metadataPath):
 	octreePath = metadataPath.replace("metadata.json","octree.bin")
@@ -256,43 +218,27 @@ def splitCloud(cloud, metadata):
 
 	return outputDFs #contains panda data frames: each df represent split part of cloud 
 
-def saveToZip(outputDFs, cloudName, outputZipDir):
-	#initialize file path:
-	filesPath = os.path.join(outputZipDir, metadata["clientID"])
-	if not os.path.exists(filesPath):
-		os.makedirs(filesPath)
-	
+def saveSplitCloud(DFs, cloudName):
+	dir = makeDir(os.path.join(csvFilesDir, cloudName))
+	for i, df in enumerate(DFs, start=1):
+		path = os.path.join(dir, cloudName + f"_pt_{i}.csv")
+		df.to_csv(path, sep=',', header=False, index=False)
+	return dir
 
-	filesPath = filesPath.replace("\\","/")
-	zipPath = genFilePath(os.path.join(filesPath, cloudName + ".zip"))
-	zipPath = zipPath.replace("\\","/")
-	
-	from zipfile import ZipFile
-	with ZipFile(zipPath, 'w') as zipper:
-
-		for i, df in enumerate(outputDFs, start=1):
-			df = df.astype({3:'int'}) #convert classification column to int
-			zipper.writestr("part_"+str(i)+".csv", df.to_csv(header=False, index=False))
-	
-	zipper.close()
-
-	return zipPath
-
-def PandaToLas(DFs, cloudName, clientID, lasPath):
+def PandaToLas(DFs, cloudName):
 	lasPaths = []
 
-	tmpLasPath = makeDir( os.path.join(lasPath, clientID, "las"), False, None)
+	if not os.path.exists("tmp_las_files"):
+		os.mkdir("tmp_las_files")
 
 	#Convert every DF file to LAS
 	for i, df in enumerate(DFs, start=1):
 		cloud_np = df.to_numpy()
 
 		#initialize las header 
-		header = laspy.LasHeader(point_format=6)#, version="1.4")
-		
+		header = laspy.LasHeader(point_format=6, version="1.4")
 		header.offsets = np.min(cloud_np[:,[0,1,2]], axis=0)
 		header.scales = np.array([0.01, 0.01, 0.01])
-		#header.
 
 		#crate las file
 		las = laspy.LasData(header)
@@ -302,17 +248,16 @@ def PandaToLas(DFs, cloudName, clientID, lasPath):
 		las.z = cloud_np[:, 2]
 		las.classification = cloud_np[:, 3].astype(int)
 
-
 		#write las file
-		tmpLasFilePath = os.path.join(tmpLasPath, cloudName + "_" +str(i))+ ".las"
+		tmpLasFilePath = os.path.join("tmp_las_files", cloudName + "_" +str(i))+ ".las"
 		las.write(tmpLasFilePath)
 
 		lasPaths.append(tmpLasFilePath)
 	return lasPaths
 
-def LasToPotree(lasPaths, clientID, potreeConverterPath):
+def LasToPotree(lasPaths, potreeConverterPath):
 
-	outputFolder = makeDir( os.path.join(potreeCloudDirs, clientID, cloudName+"_"), True, "_")
+	outputFolder = makeDir( os.path.join(potreeCloudDirs, cloudName))
 	potreeCloudPaths = []
 
 	for lasFile in lasPaths:
@@ -323,19 +268,19 @@ def LasToPotree(lasPaths, clientID, potreeConverterPath):
 		subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 		if not os.path.exists(os.path.join(outputFolder, folderName)):
-			print(["Error", "PotreeConverter failed"])
+			log("PotreeConverter failed", type="Error")
 			raise Exception("PotreeConverter failed!")
 		expectedFiles = ["hierarchy.bin", "metadata.json", "octree.bin"]
 		for file in expectedFiles:
 			if not os.path.isfile(os.path.join(outputFolder, folderName, file)):
-				print(["Error", "PotreeConverter failed"])
+				log("PotreeConverter failed", type="Error")
 				raise Exception("PotreeConverter failed!")
-
+		
+		os.remove(lasFile)
+	os.rmdir("tmp_las_files")
 	return potreeCloudPaths
 	
-def generateHTML(clientID):
-	clientClouds = os.listdir(os.path.join(potreeCloudDirs, clientID))
-	
+def generateHTML():	
 	with open(os.path.join("src","canvas.html")) as htmlFile:
 		html_txt = htmlFile.read()
 		canvas = bs4.BeautifulSoup(html_txt)
@@ -343,20 +288,19 @@ def generateHTML(clientID):
 	script_tag_listeners = canvas.find("script", {"id":"cloud_selection_list_listeners"})
 	script_tag.clear()
 
-	canvas, c_c_map = setupCloudSelection(canvas)
+	canvas, clouds = setupCloudSelection(canvas)
 	#generate js to be inserted:
 	js = "var cloudPaths = [];\nvar cloudNames = [];\n"
 	
-	clouds = c_c_map[clientID]["clouds"]
 
 	tmpDepthStr = ""
-	p = os.path.join(potreeHTMLDirs, clientID)
+	p = os.path.join(potreeCloudDirs)
 	for i in range(len(p.split(os.sep))):
 		tmpDepthStr += "../"
 	#using join from posixpath so slashes are correct for JS
 	for i, cloud in enumerate(clouds, start=1):
 		for j, part in enumerate(clouds[cloud], start=1):
-			js += "cloudPaths.push(\"{}\");\n".format(join(tmpDepthStr, potreeCloudDirs, clientID, cloud, clouds[cloud][part]))
+			js += "cloudPaths.push(\"{}\");\n".format(join(tmpDepthStr, potreeCloudDirs, cloud, clouds[cloud][part]))
 			js += "cloudNames.push(\"cloud_{}_{}\");\n\n".format(i,j)
 
 	script_tag_listeners["src"] = join(tmpDepthStr, "libs", "other", "cloud_selection_list.js")
@@ -364,7 +308,7 @@ def generateHTML(clientID):
 
 	htmlFile.close()
 
-	outputPath = os.path.join(potreeHTMLDirs, clientID)
+	outputPath = os.path.join(potreeCloudDirs)
 	if not os.path.exists(outputPath):
 		os.makedirs(outputPath)
 	outputFile = os.path.join(outputPath,"viewer.html")
@@ -377,7 +321,6 @@ def generateHTML(clientID):
 
 if __name__ == "__main__":
 	#initialize undefined variables to be changed later
-
 	cloud = None
 	DFs = None
 	lasPathsArr = None
@@ -391,38 +334,47 @@ if __name__ == "__main__":
 	try:
 		cloud = readOctree(cloud_metadata_path)
 	except Exception as e:
-		print("Error")
-		print("Loading cloud points from octree.bin failed")
+		log("Loading cloud points from octree.bin failed", type="Error")
 		raise e
 
 	#split points into multiple dataframes
 	try:
 		DFs = splitCloud(cloud, metadata)
 	except Exception as e:
-		print(["Error", "Splitting cloud failed"])
+		log("Splitting cloud failed", type="Error")
 		raise e
 
 	#Convert DFs to LAS files
 	try:
-		lasPathsArr = PandaToLas(DFs, cloudName, clientID, LASpath)
+		lasPathsArr = PandaToLas(DFs, cloudName)
 	except Exception as e:
-		print(["Error", "Converting Pandas dataframes to LAS files failed"])
+		log("Converting Pandas dataframes to LAS files failed", type="Error")
 		raise e
 
 
 	#Convert LAS to Potree using PotreeConverter
 	try:
-		potreeCloudPaths = LasToPotree(lasPathsArr, clientID, potreeConverterPath)
+		potreeCloudPaths = LasToPotree(lasPathsArr, potreeConverterPath)
 	except Exception as e:
-		print(["Error", "Converting LAS files to Potree failed"])
+		log("Converting LAS files to Potree failed", type="Error")
 		raise e
 
 	#generate HTML
 	try:
-		link = generateHTML(clientID)
+		link = generateHTML()
 	except Exception as e:
-		print(["Error", "Generating HTML document failed"])
+		log("Generating HTML document failed", type="Error")
+		raise e
+	
+	#return link to NodeJS
+	log(link, type="link")
+
+	# Save split cloud in a directory after client has recieved the link
+	try:
+		dir = saveSplitCloud(DFs, cloudName)
+		log(dir, type="csv_dir")
+		
+	except Exception as e:
+		log("Couldn't save split cloud", type="Error")
 		raise e
 
-	#return link to NodeJS
-	print(["Success!", link])

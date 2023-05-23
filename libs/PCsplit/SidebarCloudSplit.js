@@ -1,10 +1,8 @@
 import * as THREE from "../three.js/build/three.module.js";
 import "../Socket.IO/socket.io.min.js";
 
-
 //====================================CLASS SideBar====================================
 export class SideBarCloudSplit {
-   #initFlagPlanes = false;
    #allowPlaneSelect = true;
    #invisPlaneXY;
    #invisPlaneXZ;
@@ -32,18 +30,15 @@ export class SideBarCloudSplit {
    #coordInput;
    #planeList;
    #PotreeRenderArea;
-   #hidDwnldBtn;
    #btnViewSplitCloud;
-   #btnDwnldSplitCloud;
    #btnClear;
    #prepareAnim;
    #genericRepeater;
-   #dwnldLink;
    socket = io();
 
     constructor(cloudPath, btnAddPlane, btnDeletePlane, btnSplit, planeChoiceRadioXY, planeChoiceRadioXZ,
-	planeChoiceRadioYZ, coordInput, planeList, PotreeRenderArea, hidDwnldBtn, prepareAnim,
-	btnViewSplitCloud, btnDwnldSplitCloud, btnClear) {
+	planeChoiceRadioYZ, coordInput, planeList, PotreeRenderArea, prepareAnim,
+	btnViewSplitCloud, btnClear) {
         this.#cloudPath = cloudPath;
         this.#btnAddPlane = btnAddPlane;
         this.#btnDeletePlane = btnDeletePlane;
@@ -54,10 +49,8 @@ export class SideBarCloudSplit {
         this.#coordInput = coordInput;
         this.#planeList = planeList;
         this.#PotreeRenderArea = PotreeRenderArea;
-        this.#hidDwnldBtn = hidDwnldBtn;
         this.#prepareAnim = prepareAnim;
 		this.#btnViewSplitCloud = btnViewSplitCloud;
-		this.#btnDwnldSplitCloud = btnDwnldSplitCloud;
 		this.#btnClear = btnClear;
 
         //Methods
@@ -90,7 +83,6 @@ export class SideBarCloudSplit {
 
         this.splitCloud = this.splitCloud.bind(this);
         this.clearAll = this.clearAll.bind(this);
-		this.downloadCloud = this.downloadCloud.bind(this);
 
 		this.togglePrepareAnim = this.togglePrepareAnim.bind(this);
     }
@@ -125,20 +117,25 @@ export class SideBarCloudSplit {
         this.initCoordField();
         this.unlockAddBtn();
     }
+
 	lockDwnldBtn() {
 		document.getElementById("btnDwnldCloud_btn").disabled = true;
 	}
+
 	unlockDwnldBtn() {
 		document.getElementById("btnDwnldCloud_btn").disabled = false;
 	}
+
     lockPlaneChoice() {
         this.#planeChoiceRadioXY.disabled = true;
         this.#planeChoiceRadioXZ.disabled = true;
         this.#planeChoiceRadioYZ.disabled = true;
     }
+
     lockSplitCloudBtn() {
         this.#btnSplit.disabled = true;
     }
+
     unlockSplitCloudBtn() {
         this.#btnSplit.disabled = false;
     }
@@ -148,6 +145,7 @@ export class SideBarCloudSplit {
         this.#planeChoiceRadioXZ.disabled = false;
         this.#planeChoiceRadioYZ.disabled = false;
     }
+
     toggleCoordFieldLock() {
         this.#coordInput.readOnly = !this.#coordInput.readOnly;
     }
@@ -155,6 +153,7 @@ export class SideBarCloudSplit {
     unlockAddBtn() {
         this.#btnAddPlane.disabled = false;
     }
+
     lockAddBtn() {
         this.#btnAddPlane.disabled = true;
     }
@@ -162,6 +161,7 @@ export class SideBarCloudSplit {
     unlockDelBtn() {
         this.#btnDeletePlane.disabled = false;
     }
+
     lockDelBtn() {
         this.#btnDeletePlane.disabled = true;
     }
@@ -172,7 +172,6 @@ export class SideBarCloudSplit {
             this.#metadata = await response.json();
             this.#cloudPathChange = false;
         }
-
 
         this.#coordInput.style.display = "inline";
         this.#coordInput.style.width = "30%";
@@ -200,19 +199,21 @@ export class SideBarCloudSplit {
             this.#tempPlane = null;
         }
     }
+
     orderPlaneList() {
         if (this.getSplitAxis() == "X") this.#planes.sort(function(a, b){return a.position.x - b.position.x});
         if (this.getSplitAxis() == "Y") this.#planes.sort(function(a, b){return a.position.y - b.position.y});
         if (this.getSplitAxis() == "Z") this.#planes.sort(function(a, b){return a.position.z - b.position.z});
     }
+
     updatePlaneList() {
         this.orderPlaneList();
 
-        this.#planeList.innerHTML = ""; //notīra
+        this.#planeList.innerHTML = "";
         for (let i=0; i<this.#planes.length; i++) {
             let pos = Math.round(this.getSplitAxisPos(this.#planes[i])*100)/100;
             if (Number.isInteger(pos)) pos = pos + ".00"; //thank u, javascript
-            this.#planeList.innerHTML += '<li id="planeList' + i + '"> Plane ' + i + '&emsp;' + this.getSplitAxis() + ': ' + pos + '</li>';// + '&emsp;<button name='+n+' id="btnDelPlaneList' + n + '">Delete</button> </li>';
+            this.#planeList.innerHTML += '<li id="planeList' + i + '"> Plane ' + i + '&emsp;' + this.getSplitAxis() + ': ' + pos + '</li>';
         }
     }
 
@@ -220,7 +221,7 @@ export class SideBarCloudSplit {
         if (!this.#allowPlaneSelect) {
             return;
         }
-        if (this.#selectedPlane) { //ja objekts jau ir atlasīts, tad, nospiežot peli, tas tiek atmests
+        if (this.#selectedPlane) { //if plane is selected, deselect it
             if (!this.#allowSelectedPlanePlace) {
 				var n = 0;
 				var repeater = setInterval( () => {
@@ -239,7 +240,6 @@ export class SideBarCloudSplit {
 				this.#coordInput.readOnly = false;
 				this.#selectedPlane.material.color.setHex(0xff2b2b);
 				this.#selectedPlane = null;
-				//selectedForMove = false;
 				this.lockDelBtn();
 			}
 			return;
@@ -270,13 +270,12 @@ export class SideBarCloudSplit {
     }
 
     mouseChange(event) {
-        let sidebarWidth; //if else izgūts no Potree.js jeb source faila
-        if (this.#PotreeRenderArea.style.left == "0px") { //sidebar nav aktivizēts
+        let sidebarWidth;
+        if (this.#PotreeRenderArea.style.left == "0px") {
             sidebarWidth = 0;
         } else {
             sidebarWidth = document.getElementById("potree_menu").offsetWidth;
         }
-    
     
         this.#mouseMovement.x = ( (event.clientX - sidebarWidth) / this.#PotreeRenderArea.offsetWidth ) * 2 - 1;
 	    this.#mouseMovement.y = - ( event.clientY / this.#PotreeRenderArea.offsetHeight) * 2 + 1;
@@ -287,7 +286,6 @@ export class SideBarCloudSplit {
         if (this.#selectedPlane == null) {
             return; //no plane selected
         }
-        //metada is already set
         let minX, maxX, minY, maxY, minZ, maxZ;
         minX = this.#metadata.attributes[0].min[0];
         minY = this.#metadata.attributes[0].min[1];
@@ -305,7 +303,7 @@ export class SideBarCloudSplit {
         if (found.length > 0) {
             for (let i =0; i<found.length; i++) {
 
-                if (this.getSplitAxis() == "X" && ((found[i].object.userData.type == "XY"))) {// || (found[i].object.userData.type == "XZ") )){
+                if (this.getSplitAxis() == "X" && ((found[i].object.userData.type == "XY"))) {
                     let flagA = (found[i].point.x <= maxX);
                     let flagB = (found[i].point.x >= minX);
                     if (flagA && flagB) {
@@ -318,7 +316,7 @@ export class SideBarCloudSplit {
                     this.#coordInput.value = Math.round(this.#selectedPlane.position.x*100)/100;
                 }
                 
-                if (this.getSplitAxis() == "Y" && ((found[i].object.userData.type == "XY"))) {// ||  (found[i].object.userData.type == "YZ"))){
+                if (this.getSplitAxis() == "Y" && ((found[i].object.userData.type == "XY"))) {
                     let flagA = (found[i].point.y <= maxY);
                     let flagB = (found[i].point.y >= minY);
                     if (flagA && flagB) {
@@ -331,7 +329,7 @@ export class SideBarCloudSplit {
                     this.#coordInput.value = Math.round(this.#selectedPlane.position.y*100)/100;
                 }
 
-                if ((this.getSplitAxis() == "Z") && ((found[i].object.userData.type == "YZ"))) {// || (found[i].object.userData.type == "XZ") ) ) {
+                if ((this.getSplitAxis() == "Z") && ((found[i].object.userData.type == "YZ"))) {
                     let flagA = (found[i].point.z <= maxZ);
                     let flagB = (found[i].point.z >= minZ);
                     if (flagA && flagB) {
@@ -374,7 +372,6 @@ export class SideBarCloudSplit {
 
         }
 
-
         this.updatePlaneList();
     }
 
@@ -382,11 +379,7 @@ export class SideBarCloudSplit {
         this.lockPlaneChoice();
         this.unlockSplitCloudBtn();
 		this.#btnClear.disabled = false;
-        if (!this.#initFlagPlanes) {
-            this.initInvisiblePlanes();
-            this.#initFlagPlanes = true;
-        }
-
+        this.initInvisiblePlanes();
 
         //since its possible that a different cloud has been selected:
         if (this.#metadata == null || this.#cloudPathChange) {
@@ -395,7 +388,6 @@ export class SideBarCloudSplit {
             this.#cloudPathChange = false;
         }
         
-
         let minX, maxX, minY, maxY, minZ, maxZ;
         minX = this.#metadata.attributes[0].min[0];
         minY = this.#metadata.attributes[0].min[1];
@@ -404,9 +396,7 @@ export class SideBarCloudSplit {
         maxY = this.#metadata.attributes[0].max[1];
         maxZ = this.#metadata.attributes[0].max[2];
     
-    
         let material = new THREE.MeshBasicMaterial( {color: 0xff2b2b, transparent:true,opacity: .7, side:THREE.DoubleSide} );
-    
     
         let X, Y, Z;
         let geometry;
@@ -471,7 +461,6 @@ export class SideBarCloudSplit {
     }
 
     async initInvisiblePlanes() {
-    
         let minX, maxX, minY, maxY, minZ, maxZ;
         minX = this.#metadata.attributes[0].min[0];
         minY = this.#metadata.attributes[0].min[1];
@@ -484,7 +473,7 @@ export class SideBarCloudSplit {
         let X, Y, Z;
         let geometry;
         let rotation;
-        let k = 1000; //cik reizes neredzamās plaknes ir lielākas par mākoni
+        let k = 1000; //size factor
     
         X = (minX + maxX) / 2;
         Y = (minY + maxY) / 2;
@@ -551,7 +540,6 @@ export class SideBarCloudSplit {
         this.lockAddBtn();
         this.#coordInput.readOnly = true;
         this.#allowPlaneSelect = false;
-		this.#btnDwnldSplitCloud.style.display = "none";
 		this.#btnViewSplitCloud.style.display = "none";
         
 		let minX, maxX, minY, maxY, minZ, maxZ;
@@ -583,8 +571,6 @@ export class SideBarCloudSplit {
 			splitAxis: this.getSplitAxis(),
 			splitPoints: splitCoords,
 			metadataPath: this.#cloudPath,
-			clientID: this.socket.id
-
 		};
 
 		let planesMetadataString = JSON.stringify(planesMetadata);
@@ -592,13 +578,11 @@ export class SideBarCloudSplit {
 		//this lets backend know that "SplitBtnClick" event has been executed.
 		//planesMetadataString is also sent over to backend
 		this.socket.emit("SplitBtnClick", planesMetadataString);
-		
-		this.socket.connect();
 
-		//this listens for backend event "pyDone"
+		//this listens for backend event "splitCloudPython"
 		//that takes place when python code has finished
 		//message is argument recieved from backend
-		this.socket.on("pyDone", (htmlLink) => {
+		this.socket.once("splitCloudPython", (htmlLink) => {
 			if (htmlLink == "Fail") {
 				alert("Something went wrong. Please try again!");
 				this.unlockSplitCloudBtn();
@@ -608,89 +592,16 @@ export class SideBarCloudSplit {
 			} else {
 				//Process python output here
 				this.#btnViewSplitCloud.style.display = "inline"; //setups button
-				this.#btnDwnldSplitCloud.style.display = "inline";
 				this.#btnViewSplitCloud.setAttribute("href", window.location.href + htmlLink);
 			}
 			this.togglePrepareAnim("Splitting cloud", false);
-			this.#dwnldLink = undefined;
 		});
 
+		// When Python script finishes successfully
+		this.socket.once("Py_split_success", () => {
+			alert("Split cloud csv files saved successfully!");
+		});
     }
-
-	downloadCloud() {
-		console.log("Preparing archive of csv files...");
-		this.lockDwnldBtn();
-
-		if (this.#dwnldLink) { //if download link is already generated
-			this.#hidDwnldBtn.click();
-			this.unlockDwnldBtn();
-			return;
-		}
-
-
-		//let user know that stuff is happening even tho nothing seems to be happening :D
-		this.togglePrepareAnim("Preparing zip file", true);
-
-
-
-		let minX, maxX, minY, maxY, minZ, maxZ;
-        minX = this.#metadata.attributes[0].min[0];
-        minY = this.#metadata.attributes[0].min[1];
-        minZ = this.#metadata.attributes[0].min[2];
-        maxX = this.#metadata.attributes[0].max[0];
-        maxY = this.#metadata.attributes[0].max[1];
-        maxZ = this.#metadata.attributes[0].max[2];
-
-		let splitCoords = [];
-        for (let i=-1; i <= this.#planes.length; i++) {
-			if (i == -1) {
-				if (this.getSplitAxis() == "X") splitCoords.push(minX);
-            	if (this.getSplitAxis() == "Y") splitCoords.push(minY);
-            	if (this.getSplitAxis() == "Z") splitCoords.push(minZ);
-			} else if (i == this.#planes.length) {
-				if (this.getSplitAxis() == "X") splitCoords.push(maxX);
-            	if (this.getSplitAxis() == "Y") splitCoords.push(maxY);
-            	if (this.getSplitAxis() == "Z") splitCoords.push(maxZ);
-			} else {
-            	if (this.getSplitAxis() == "X") splitCoords.push(this.#planes[i].position.x);
-            	if (this.getSplitAxis() == "Y") splitCoords.push(this.#planes[i].position.y);
-            	if (this.getSplitAxis() == "Z") splitCoords.push(this.#planes[i].position.z);
-			}
-        }
-
-		let planesMetadata = {
-			splitAxis: this.getSplitAxis(),
-			splitPoints: splitCoords,
-			metadataPath: this.#cloudPath,
-			clientID: this.socket.id
-
-		};
-		let planesMetadataString = JSON.stringify(planesMetadata);
-
-		this.socket.emit("splitDwnldClick", planesMetadataString);
-
-		this.socket.once("pyDone_dwnld", (link) =>{
-			console.log("recieved message from back-end");
-			if (link == "Fail") {
-				this.#btnDwnldSplitCloud.disabled = false;
-				alert("Something went wrong. Please try again!");
-				this.unlockDwnldBtn();
-			} else {
-				console.log("File prepared, start download...");
-				this.#hidDwnldBtn.setAttribute("href", link);
-				this.#hidDwnldBtn.setAttribute("download", link.split("/").pop());
-				this.#hidDwnldBtn.click();
-				this.#dwnldLink = link;
-				this.unlockDwnldBtn();
-				//this.clearAll();
-			}
-			this.togglePrepareAnim("Preparing zip file", false);
-
-		});
-
-
-	}
-
 
     clearAll() {
         for (let i=0; i < this.#planes.length; i++) {
@@ -710,7 +621,6 @@ export class SideBarCloudSplit {
         this.#coordInput.value = null;
         this.#allowPlaneSelect = true;
 		this.#btnClear.disabled = true;
-		this.#dwnldLink = undefined;
 
 		this.togglePrepareAnim("Preparing zip file", false);
 		this.togglePrepareAnim("Splitting cloud", false);
@@ -729,12 +639,10 @@ export class SideBarCloudSplit {
         this.#PotreeRenderArea.addEventListener("click", this.toggleSelectPlane);
         this.#PotreeRenderArea.addEventListener('mousemove', this.mouseChange);
 
-		this.#btnDwnldSplitCloud.addEventListener("click", this.downloadCloud);
 		this.#btnClear.addEventListener("click", this.clearAll);
 
 
         //===================================
     }
-
 }
 //====================================END CLASS SideBar=================================

@@ -151,18 +151,13 @@
 			$("#menu_tools").next().show();
 		});
 	 
-			
-
-		
 		let defaultGradient = "RAINBOW";
 		//Load point clouds
 		for (let i=0; i<cloudPaths.length; i++) {
 			Potree.loadPointCloud(cloudPaths[i], cloudNames[i], c => {
 			let pointcloud = c.pointcloud;
-			//if (i != 0) pointcloud.visible = false; // hide all but 1st cloud
 			let material = pointcloud.material;
 
-			
 			viewer.scene.addPointCloud(pointcloud);
 
 			material.pointSizeType = Potree.PointSizeType.FIXED;
@@ -270,7 +265,6 @@
 	{
 		const btnFlipZ = document.getElementById("btnFlipVertical");
 		btnFlipZ.addEventListener("click", () => {
-			console.log("Fliping Z axis");
 			viewer.scene.cameraP.scale.y = -viewer.scene.cameraP.scale.y;
 			viewer.orbitControls.flipVertical = !viewer.orbitControls.flipVertical;
 		});
@@ -278,6 +272,51 @@
 	</script>
 
 	<script id="cloud_selection_list_listeners" type="module" src=""></script>
+	<script type="module">
+		async function get_metadata(metadata_path) {
+			let response = await fetch(metadata_path);
+            let metadata = await response.json();
+			return metadata;
+		}
+		viewer.classifications = {};
+		cloudPaths.forEach(metadata_path => {
+			get_metadata(metadata_path).then(metadata => {
+				let classif_atr_ind = 0;
+				for (let i=0; i< metadata.attributes.length; i++) {
+					if (metadata.attributes[i].name === "classification") {
+						classif_atr_ind = i;
+					}
+				}
+				let cluster_count = metadata.attributes[classif_atr_ind].max[0] + 1; //+1 because min is 0
+				if (cluster_count > Object.keys(viewer.classifications).length -1) {
+					// Set custom classifications
+					let classifications = {};
 
+					classifications[255] = {
+						color: [127/255, 127/255, 127/255, 1], // r/255, g/255, b/255, some flag idk
+						name:"noise",
+						visible:true
+					};
+					
+					const frequency = 0.2; // Adjust this to change the frequency of the sine wave
+					for (let i=0; i<cluster_count; i++) {
+						const r = Math.abs(Math.sin(frequency * i));
+						const g = Math.abs(Math.sin(frequency * i + 2 * Math.PI / 3));
+						const b = Math.abs(Math.sin(frequency * i + 4 * Math.PI / 3));
+				
+						classifications[i] = {
+							color: [r,g,b,1],
+							name:"cluster_"+i,
+							visible:true
+						}
+					}
+					viewer.setClassifications(classifications);
+					document.getElementById("classificationList").prepend(document.getElementById("chkClassification_255").parentElement.parentElement)
+					document.getElementById("classificationList").prepend(document.getElementById("toggleClassificationFilters").parentElement.parentElement)
+				}
+			});
+		});
+
+	</script>
 </body>
 </html>

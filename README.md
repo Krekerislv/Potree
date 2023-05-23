@@ -52,6 +52,25 @@ Copy the converted directory into &lt;potreeDirectory&gt;/pointclouds/data_conve
 * [PotreeConverter ](https://github.com/potree/PotreeConverter/releases) - Convert your point cloud to the Potree format.
 * [PotreeDesktop ](https://github.com/potree/PotreeDesktop/releases) - Desktop version of Potree. Allows drag&drop of point clouds into the viewer.
 
+# Configuration (HEAL)
+In order to use point cloud splitting functionality, the following Python packages must be installed:
+* laspy
+* numpy
+* pandas
+* beautifulsoup4
+
+Most of the configuration is done in the config.ini file. In it there is:
+* PotreeConverter
+    * ```path``` - specify the path to the Potree Converter executable.
+* pointClouds
+    * ```pointclouds_dir``` - lets Potree know where to look for point clouds.
+	* ```csv_files_dir``` - specify where to save split point clouds in .csv format.
+	* ```split_pointclouds_dir``` - specify where to save split point clouds in Potree format.
+* PythonEnv
+    * ```python_path``` - specify the Python enviroment or set the value to ```auto``` in order to automatically find Python enviroment.
+
+To specify where the terminal log file is saved, see ```package.json```->```"scripts"```->```"start"``` and edit the path there (after ```>>```).
+
 # Examples
 
 <table>

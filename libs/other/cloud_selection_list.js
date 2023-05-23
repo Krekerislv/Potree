@@ -101,7 +101,6 @@ function getBtnState(btn) {
 	return true;
 }
 
-
 btnsView.forEach(btn => {
 	if (btn == getMasterBtn(btn)) {
 		btn.addEventListener("click", () => {
@@ -122,7 +121,6 @@ function updateButtons() {
 			setBtnState(btn, pcJSON[getCloudName(btn)[0]]);
 			checkAllStates(btn);
 		}
-		
 	});
 }
 

@@ -17,7 +17,7 @@
   ],
   "main": "./build/potree/potree.js",
   "scripts": {
-    "start": "gulp watch",
+    "start": "gulp watch 2>&1 | while IFS= read -r line; do echo \"[$(date '+%Y-%m-%d %H:%M:%S')] $line\" >> ./potree_log.log; echo $line; done",
     "build": "gulp build pack",
     "postinstall": "npm run build"
   },
