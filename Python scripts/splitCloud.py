@@ -153,11 +153,14 @@ def readOctree(metadataPath):
 	scale = metadata["scale"]
 	numPoints = metadata["points"]
 
-
+	classif_start_byte = 0
 	#get BytesPerPoint from metadata
 	bytesPerPoint = 0
 	for attribute in metadata["attributes"]:
+		if attribute["name"] == "classification":
+			classif_start_byte = bytesPerPoint
 		bytesPerPoint += attribute["size"]
+		
 
 
 	#read file as binary
@@ -168,7 +171,7 @@ def readOctree(metadataPath):
 
 	#take first 12 columns (each 4 cols represent 1 int32)
 	xyz_int32 = data[:, :12].view(dtype=np.int32) #0-11
-	classification_uint8 = data[: , 16].view(dtype=np.uint8) #17th column
+	classification_uint8 = data[: , classif_start_byte].view(dtype=np.uint8)
 	#this gives an array of shape (numPoints,3)
 
 
